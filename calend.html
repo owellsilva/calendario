@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <title>Calendario</title>
+  <link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900|Material+Icons'>
+<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/vuetify@1.5.14/dist/vuetify.min.css'><link rel="stylesheet" href="/css/style.css">
+<meta name="viewport" content="width=device-width">
+<link rel="shortcut icon" href="/img/favicon.png" type="image/x-icon">
+
+</head>
+<body>
+<v-container id="app">
+  <v-app id="inspire">
+    <v-layout class="white" row wrap>
+      <div xs12 sm5 class="botao-grupo-calendario-flex">
+        <v-btn-toggle v-model="tipoCalendario" class="botao-grupo-calendario">
+              <v-btn class="botao-tipo-calendario"  flat value="day" @click="tipoCalendario = 'day'">
+                <span>DIA</span>
+                <v-icon>view_day</v-icon>
+              </v-btn>
+              <v-btn class="botao-tipo-calendario" flat value="week" @click="tipoCalendario = 'week'">
+                <span>SEMANA</span>
+                <v-icon>view_week</v-icon>
+              </v-btn>
+              <v-btn class="botao-tipo-calendario" flat value="month" @click="tipoCalendario = 'month'">
+                <span>MES</span>
+                <v-icon>view_module</v-icon>
+              </v-btn>
+            </v-btn-toggle>
+          </div>
+    <v-flex xs2 sm1>
+        <v-btn icon class="botao-direcional" @click="voltar">
+          <v-icon>keyboard_arrow_left</v-icon>
+        </v-btn>
+      </v-flex> 
+      <v-flex xs8 sm5 class="modal-mes-flex">
+      <v-dialog v-if="tipoCalendario == 'month'"
+        ref="modalMes"
+        v-model="modalMes"
+        :return-value.sync="mes"
+        lazy
+        full-width
+        width="290px"
+        locale="pt-br"
+      >
+        <template v-slot:activator="{ on }">
+          <v-text-field
+            v-model="textoMesSelecionado"
+            label="MES"
+            prepend-icon="event"
+            readonly
+            v-on="on"
+          ></v-text-field>
+        </template>
+        <v-date-picker locale="pt-br" v-model="mes" type="month" scrollable @input="selecionarData($event)">
+        </v-date-picker>
+      </v-dialog>
+        
+       <v-dialog v-else
+        ref="modalDiaSemana"
+        v-model="modalDiaSemana"
+        :return-value.sync="diaSemana"
+        lazy
+        full-width
+        width="290px"
+      >
+        <template v-slot:activator="{ on }">
+          <v-text-field
+            v-model="dataDiaSemanaFormatada"
+            label="Dia"
+            prepend-icon="event"
+            readonly
+            v-on="on"
+          ></v-text-field>
+        </template>
+        <v-date-picker @input="salvarDiaSemana($event)" v-model="diaSemana" scrollable locale="pt-br">          
+        </v-date-picker>
+      </v-dialog>
+    </v-flex>
+      <v-flex xs2 sm1>
+        <v-btn icon class="botao-direcional right" @click="adiantar">
+          <v-icon>keyboard_arrow_right</v-icon>
+        </v-btn>
+      </v-flex>
+    </v-layout>
+    <v-layout>
+      <div  style="width: 100%;">
+        <v-sheet height="500">
+          <v-calendar
+            :interval-minutes="30"
+            :interval-count="48"
+            :interval-format="formatarIntervalo"
+            locale="pt-br"
+            @click:date="cadastrarNovoCompromiso"
+            :now="hoje"
+            color="primary"
+            ref="calendario"
+            v-model="dataAtualCalendario"
+            :type="tipoCalendario"
+            v-touch="{
+              left: () => adiantar(),
+              right: () => voltar()
+            }"
+          >
+            <template v-slot:day="{ date, time, year, month, day, hour, minute, weekday, hasDay, hasTime, past, present, future }">
+              
+              <v-container class="container-mes" fill-height v-ripple @click="cadastrarNovoCompromiso({ date, time, year, month, day, hour, minute, weekday, hasDay, hasTime, past, present, future })" >
+              <template v-for="event in eventsMap[date]">
+                <v-menu
+                  :key="event.titulo"
+                  v-model="event.aberto"
+                  :close-on-content-click="false"                   offset-x
+                >
+                  <template v-slot:activator="{ on }">
+                    <div                      
+                      v-ripple
+                      class="Compromiso"
+                      :class="event.cor ? event.cor : blue"
+                      v-on="on"
+                      @mousedown.stop
+                      @click.stop
+                     @touchstart.stop
+                      v-html="event.titulo"
+                    ></div>
+                  </template>
+                  <v-card
+                    color="grey lighten-4"
+                    min-width="350px"
+                    flat
+                  >
+                    <v-toolbar
+                      :color="event.cor"
+                      dark
+                    >
+                     <v-tooltip top>
+                    <template v-slot:activator="{ on }"> 
+                      <v-toolbar-title v-on="on" v-html="event.titulo"></v-toolbar-title>
+        </template>
+          <span>{{event.titulo}}</span>
+          </v-tooltip>
+                      <v-spacer></v-spacer>
+                      <div v-if="larguraTela > 768">
+                        <v-btn @click="selecionarParaEdicao(event)" icon>
+                        <v-icon>edit</v-icon>
+                      </v-btn>
+                      <v-btn icon @click="excluirCompromiso(event.id); event.aberto = false;">
+                        <v-icon>delete_forever</v-icon>
+                      </v-btn>
+                      </div>
+                      <v-menu v-else bottom left>
+            <template v-slot:activator="{ on }">
+              <v-btn
+                dark
+                icon
+                v-on="on"
+              >
+                <v-icon>more_vert</v-icon>
+              </v-btn>
+            </template>
+
+            <v-list>
+              <v-list-tile                        @click="selecionarParaEdicao(event)"
+              > 
+                <v-list-tile-title>Editar</v-list-tile-title>
+              </v-list-tile>
+              <v-list-tile                           @click="excluirCompromiso(event.id); event.aberto = false;"
+              >
+                <v-list-tile-title>Borrar</v-list-tile-title>
+              </v-list-tile>
+            </v-list>
+          </v-menu>
+                      <v-btn icon @click="event.aberto = false">
+                        <v-icon>close</v-icon>
+                      </v-btn>
+                      
+                      <v-btn icon v-if="larguraTela <= 768">
+                        <v-icon></v-icon>
+                      </v-btn>
+                    </v-toolbar>
+                    <v-card-text>
+                      <v-layout row wrap v-if="event.detalhes">
+                        <v-flex xs2>
+                          <v-icon>chat</v-icon>                      
+                        </v-flex>
+                        <v-flex xs10>
+                          <span v-html="event.detalhes.replace(/\n/g, '<br/>')"></span>
+                        </v-flex>
+                      </v-layout>
+                      <br v-if="event.detalhes"/>
+                       <v-layout row wrap>
+                         <v-flex xs2>
+                          <v-icon>today</v-icon>                      
+                        </v-flex>
+                         <v-flex xs10>
+                           <span>{{retornarDataFormatada(event.date)}}</span>
+                        </v-flex>
+                      </v-layout>
+                      <br/>
+                      <v-layout row wrap>
+                         <v-flex xs2>
+                          <v-icon>access_time</v-icon>                      
+                        </v-flex>
+                        <v-flex xs10>
+                           <span>{{event.time}}</span>
+                        </v-flex>
+                      </v-layout>
+                    </v-card-text>
+                  </v-card>
+                </v-menu>
+              </template>
+                </v-container>
+            </template>
+            <template v-slot:interval="{ date, time, year, month, day, hour, minute, weekday, hasDay, hasTime, past, present, future }">
+              
+            <v-container class="container-mes" fill-height v-ripple @click="cadastrarNovoCompromiso({ date, time, year, month, day, hour, minute, weekday, hasDay, hasTime, past, present, future })">
+              <template v-for="event in retornarEventosPorHora(date, hour, minute)">
+                <v-menu
+                  :key="event.titulo"
+                  v-model="event.aberto"
+                  :close-on-content-click="false"
+                  offset-x
+                  min-width="100px"
+                >
+                  <template v-slot:activator="{ on }">
+                  <div                       
+                     v-ripple
+                     class="Compromiso"
+                     :class="event.cor ? event.cor : blue"
+                     v-html="event.titulo"
+                     @mousedown.stop
+                      @click.stop
+                       @touchstart.stop
+                       v-on="on"
+                     ></div>
+                  </template>
+                  <v-card
+                    color="grey lighten-4"
+                    flat
+                  >
+                    <v-toolbar
+                      :color="event.cor"
+                      dark
+                    >
+                     <v-tooltip top>
+      <template v-slot:activator="{ on }"> 
+                      <v-toolbar-title v-on="on" v-html="event.titulo"></v-toolbar-title>
+        </template>
+      <span>{{event.titulo}}</span>
+    </v-tooltip>
+                      <v-spacer></v-spacer>
+                      <div v-if="larguraTela > 768">
+                        <v-btn @click="selecionarParaEdicao(event)" icon>
+                        <v-icon>edit</v-icon>
+                      </v-btn>
+                      <v-btn icon @click="excluirCompromiso(event.id); event.aberto = false;">
+                        <v-icon>delete_forever</v-icon>
+                      </v-btn>
+                      </div>
+                      <v-menu v-else bottom left>
+            <template v-slot:activator="{ on }">
+              <v-btn
+                dark
+                icon
+                v-on="on"
+              >
+                <v-icon>more_vert</v-icon>
+              </v-btn>
+            </template>
+
+            <v-list>
+              <v-list-tile                        @click="selecionarParaEdicao(event)"
+              > 
+                <v-list-tile-title>Editar</v-list-tile-title>
+              </v-list-tile>
+              <v-list-tile                           @click="excluirCompromiso(event.id); event.aberto = false;"
+              >
+                <v-list-tile-title>Excluir</v-list-tile-title>
+              </v-list-tile>
+            </v-list>
+          </v-menu>
+                      <v-btn icon @click="event.aberto = false">
+                        <v-icon>close</v-icon>
+                      </v-btn>
+                    </v-toolbar>
+                    <v-card-text>
+                      <v-layout row wrap v-if="event.detalhes">
+                        <v-flex xs2>
+                          <v-icon>chat</v-icon>                      
+                        </v-flex>
+                        <v-flex xs10>
+                          <span v-html="event.detalhes.replace(/\n/g, '<br/>')"></span>
+                        </v-flex>
+                      </v-layout>
+                      <br v-if="event.detalhes"/>
+                       <v-layout row wrap>
+                         <v-flex xs2>
+                          <v-icon>today</v-icon>                      
+                        </v-flex>
+                         <v-flex xs10>
+                           <span>{{retornarDataFormatada(event.date)}}</span>
+                        </v-flex>
+                      </v-layout>
+                      <br/>
+                      <v-layout row wrap>
+                         <v-flex xs2>
+                          <v-icon>access_time</v-icon>                      
+                        </v-flex>
+                        <v-flex xs10>
+                           <span>{{event.time}}</span>
+                        </v-flex>
+                      </v-layout>
+                    </v-card-text>
+                  </v-card>
+                  </v-menu>
+              </template>
+            </v-container>
+          </template>
+            
+          </v-calendar>
+        </v-sheet>
+      </div>
+    </v-layout> 
+    <v-dialog :scrollable="larguraTela > 768" @keydown.enter="salvarCompromiso" v-model="modalNovoCompromiso" max-width="600px" :fullscreen="larguraTela <= 768" :transition="larguraTela <= 768 ? 'slide-x-transition' : 'dialog-transition'">
+      <v-card>
+        <v-card-title>
+          <span class="headline">Compromiso</span>
+          <v-spacer></v-spacer>
+          <v-btn icon @click="modalNovoCompromiso = false">
+            <v-icon>close</v-icon>
+          </v-btn>
+        </v-card-title>
+        <v-divider></v-divider>
+        <v-card-text :style="larguraTela > 768 ? 'height: 500px;' : ''">
+          <v-form ref="formularioCompromiso">
+            <v-container grid-list-md>
+            <v-layout wrap>
+              <v-flex xs12>
+                <v-text-field ref="tituloNovoCompromiso" v-model="novoCompromiso.titulo" label="Título" :rules="regrasTitulo"></v-text-filed>
+              </v-flex>
+              <v-flex xs12>
+                <v-textarea  v-model="novoCompromiso.detalhes" label="Detalhes" outline></v-textarea>
+              </v-flex>
+              <v-flex xs6>
+                <v-dialog
+        ref="dialog"
+        v-model="modalData"
+        :return-value.sync="novoCompromiso.date"
+        persistent
+        lazy
+        full-width
+        width="290px"
+      >
+        <template v-slot:activator="{ on }">
+          <v-text-field
+            v-model="dataCompromisoFormatada"
+            label="Data"
+            prepend-icon="event"
+            readonly
+            v-on="on"
+            :rules="regrasData"
+          ></v-text-field>
+        </template>
+        <v-date-picker locale="pt-br" v-model="novoCompromiso.date" scrollable>
+          <v-spacer></v-spacer>
+          <v-btn flat color="primary" @click="modalData = false">Cancelar</v-btn>
+          <v-btn flat color="primary" @click="$refs.dialog.save(novoCompromiso.date)">OK</v-btn>
+        </v-date-picker>
+      </v-dialog>
+              </v-flex>
+              <v-flex xs6>
+                <v-dialog
+                          scrollable
+        ref="modalHora"
+        v-model="modalHora"
+        :return-value.sync="novoCompromiso.time"
+        persistent
+        lazy
+        full-width
+        width="290px"
+      >
+        <template v-slot:activator="{ on }">
+          <v-text-field
+            v-model="novoCompromiso.time"
+            label="Hora"
+            prepend-icon="access_time"
+            readonly
+            v-on="on"
+            :rules="regrasHora"
+          ></v-text-field>
+        </template>
+                  <v-card>
+        <v-card-text style="height: 365px; padding: 0px">
+          <v-time-picker
+          v-if="modalHora"
+          v-model="novoCompromiso.time"
+          full-width
+          format="24hr"
+          locale="pt-br"
+        ></v-time-picker>
+                  </v-card-text>
+                  <v-card-actions>
+                    <v-btn flat color="primary" @click="modalHora = false">Cancelar</v-btn>
+          <v-btn flat color="primary" @click="salvarHoraNovoCompromiso">OK</v-btn>
+                  </v-card-actions>
+                    </v-card>
+      </v-dialog>
+              </v-flex>
+              <v-flex xs12>
+                 <v-select @keydown.enter.stop.prevent :color="novoCompromiso.cor" v-model="novoCompromiso.cor" :items="cores" label="Cor">
+                   <template v-slot:append>
+                     <div :class="novoCompromiso.cor" class="quadrado-cor"></div>
+                  </template>
+                   <template v-slot:item={item}>
+                     <div :class="item.value" class="quadrado-cor"></div>{{item.text}}
+                   </template>
+                </v-select>
+              </v-flex>
+            </v-layout>
+          </v-container>
+          </v-form>          
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="scondary" flat @click="modalNovoCompromiso = false">Fechar</v-btn>
+          <v-btn @click="salvarCompromiso" color="success"  @click="modalNovoCompromiso = false">{{textoBotaoSalvar}}</v-btn>
+        </v-card-actions>         
+      </v-card>
+    </v-dialog>
+     <v-btn v-model="botaoAdicionarVisivel" @click="cadastrarNovoCompromiso()" fixed bottom right fab dark small color="primary">
+      <v-icon dark>add</v-icon>
+    </v-btn>
+  </v-app>
+</div> 
+  <script src='https://cdn.jsdelivr.net/npm/babel-polyfill/dist/polyfill.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/vue/dist/vue.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/vuetify@1.5.14/dist/vuetify.min.js'></script>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js'></script>
+<script  src="/js/script.js"></script>
+
+</body>
+</html>
